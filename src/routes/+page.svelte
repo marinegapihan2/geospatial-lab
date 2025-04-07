@@ -8,8 +8,47 @@ mapboxgl.accessToken = "pk.eyJ1IjoibWFyaW5lZ2FwaWhhbiIsImEiOiJjbTk0c3h6bmgwd2hzM
 
 import { onMount } from "svelte";
 
+import * as d3 from "d3";
+let stations = [];
+let map;
+let mapViewChanged = 0;
+$: map?.on("move", evt => mapViewChanged++);
+
+let trips=[];
+let departures;
+let arrivals;
+
+
+onMount(async () => {
+	stations = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-stations.csv");
+	trips = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-traffic-2024-03.csv");
+
+
+	departures = d3.rollup(trips, v => v.length, d => d.start_station_id);
+	arrivals=d3.rollup(trips, v => v.length, d => d.end_station_id);
+
+stations = stations.map(station => {
+	let id = station.Number;
+	station.arrivals = arrivals.get(id) ?? 0;
+	station.departures= departures.get(id)?? 0;
+	station.totalTraffic = station.arrivals + station.departures;
+	return station;
+	});
+
+});
+
+function getCoords (station) {
+	let point = new mapboxgl.LngLat(+station.Long, +station.Lat);
+	let {x, y} = map.project(point);
+	return {cx: x, cy: y};
+}
+
+$: radiusScale = d3.scaleSqrt()
+	.domain([0, d3.max(stations, d => d.totalTraffic) || 0])
+	.range([0, 25]);
+
 async function initMap() {
-	let map = new mapboxgl.Map({
+	map = new mapboxgl.Map({
     container: "map",
       style: "mapbox://styles/marinegapihan/cm94ts66z000u01s51e9h25mm",
       zoom: 12,
@@ -57,12 +96,37 @@ onMount(() => {
 
 </script>
 
-<div id="map" />
+<div id="map">
+	<svg style="pointer-events:none;">
+		{#key mapViewChanged}
+		{#each stations as station}
+		<circle
+			{ ...getCoords(station) }
+			r={radiusScale(station.totalTraffic)}
+			style="fill: steelblue; fill-opacity:0.6; stroke:white; pointer-events:auto;">
+			<title>{station.totalTraffic} trips ({station.departures} departures, { station.arrivals} arrivals)</title>
+		</circle>
+
+	{/each}
+	{/key}
+	</svg>
+</div>
+
 
 <style>
     @import url("$lib/global.css");
     #map {
 	flex: 1;
 }
+#map svg {
+	position: absolute;
+	z-index: 1;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
 
+circle{
+	pointer-events: auto;
+}
 </style>
