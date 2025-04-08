@@ -1,7 +1,21 @@
-<h1>Bikewatching</h1>
-<p>Building an immersive, interactive map visualization of bike traffic in the Boston area during different times of the day.</p>
+<header>
+    <h1>🚲 BikeWatch</h1>
+    <label>
+        Filter by time:
+        <input type="range" min="-1" max="1440" bind:value={timeFilter} />
+        {#if timeFilter !== -1}
+            <time style="display: block">
+                {timeFilterLabel}
+            </time>
+        {:else}
+            <em style="display: block">(any time)</em>
+        {/if}
+    </label>
+</header>
+
 
 <script>
+
 import mapboxgl from "mapbox-gl";
 import "../../node_modules/mapbox-gl/dist/mapbox-gl.css";
 mapboxgl.accessToken = "pk.eyJ1IjoibWFyaW5lZ2FwaWhhbiIsImEiOiJjbTk0c3h6bmgwd2hzMnJweTRlaHlqN3lyIn0.zQlSkV4IXf490212y0j28Q";
@@ -21,8 +35,13 @@ let arrivals;
 
 onMount(async () => {
 	stations = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-stations.csv");
-	trips = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-traffic-2024-03.csv");
-
+	trips = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-traffic-2024-03.csv").then(trips => {
+	for (let trip of trips) {
+		trip.started_at = new Date(trip.started_at)
+		trip.ended_at = new Date(trip.ended_at)
+	}
+	return trips;
+});
 
 	departures = d3.rollup(trips, v => v.length, d => d.start_station_id);
 	arrivals=d3.rollup(trips, v => v.length, d => d.end_station_id);
@@ -43,9 +62,37 @@ function getCoords (station) {
 	return {cx: x, cy: y};
 }
 
+function minutesSinceMidnight (date) {
+	return date.getHours() * 60 + date.getMinutes();
+}
+
+$: filteredTrips = timeFilter === -1? trips : trips.filter(trip => {
+	let startedMinutes = minutesSinceMidnight(trip.started_at);
+	let endedMinutes = minutesSinceMidnight(trip.ended_at);
+	return Math.abs(startedMinutes - timeFilter) <= 60
+	       || Math.abs(endedMinutes - timeFilter) <= 60;
+});
+
+
+$: filteredDepartures = d3.rollup(filteredTrips, v => v.length, d => d.start_station_id);
+$: filteredArrivals = d3.rollup(filteredTrips, v => v.length, d => d.end_station_id);
+
+$: filteredStations = stations.map(station => {
+	const id = station.Number;
+	const arr = filteredArrivals.get(id) ?? 0;
+	const dep = filteredDepartures.get(id) ?? 0;
+	return {
+		...station,
+		arrivals: arr,
+		departures: dep,
+		totalTraffic: arr + dep
+	};
+});
+
 $: radiusScale = d3.scaleSqrt()
 	.domain([0, d3.max(stations, d => d.totalTraffic) || 0])
-	.range([0, 25]);
+  .range(timeFilter === -1 ? [0, 25] : [3, 50]);
+
 
 async function initMap() {
 	map = new mapboxgl.Map({
@@ -94,12 +141,16 @@ onMount(() => {
 	initMap();
 });
 
+let timeFilter = -1;
+$: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
+                     .toLocaleString("en", {timeStyle: "short"});
+
 </script>
 
 <div id="map">
 	<svg style="pointer-events:none;">
 		{#key mapViewChanged}
-		{#each stations as station}
+		{#each filteredStations as station}
 		<circle
 			{ ...getCoords(station) }
 			r={radiusScale(station.totalTraffic)}
@@ -129,4 +180,26 @@ onMount(() => {
 circle{
 	pointer-events: auto;
 }
+
+
+header {
+  display: flex;
+  gap: 1em;
+  align-items: baseline;
+}
+
+label {
+  margin-left: auto;
+}
+
+time {
+  display: block;
+}
+
+em{
+  display: block;
+  color: gray;
+  font-style: italic;
+}
+
 </style>
