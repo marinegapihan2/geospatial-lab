@@ -32,6 +32,13 @@ let trips=[];
 let departures;
 let arrivals;
 
+const departuresByMinute = Array.from({length: 1440}, () => []);
+const arrivalsByMinute = Array.from({length: 1440}, () => []);
+
+let stationFlow = d3.scaleQuantize()
+	.domain([0, 1])
+	.range([0, 0.5, 1]);
+
 
 onMount(async () => {
 	stations = await d3.csv("https://vis-society.github.io/labs/8/data/bluebikes-stations.csv");
@@ -39,6 +46,10 @@ onMount(async () => {
 	for (let trip of trips) {
 		trip.started_at = new Date(trip.started_at)
 		trip.ended_at = new Date(trip.ended_at)
+		let startedMinutes = minutesSinceMidnight(trip.started_at);
+departuresByMinute[startedMinutes].push(trip);
+		let endedMinutes = minutesSinceMidnight(trip.ended_at);
+arrivalsByMinute[startedMinutes].push(trip);
 	}
 	return trips;
 });
@@ -66,6 +77,20 @@ function minutesSinceMidnight (date) {
 	return date.getHours() * 60 + date.getMinutes();
 }
 
+function filterByMinute (tripsByMinute, minute) {
+	let minMinute = (minute - 60 + 1440) % 1440;
+	let maxMinute = (minute + 60) % 1440;
+
+	if (minMinute > maxMinute) {
+		let beforeMidnight = tripsByMinute.slice(minMinute);
+		let afterMidnight = tripsByMinute.slice(0, maxMinute);
+		return beforeMidnight.concat(afterMidnight).flat();
+	}
+	else {
+		return tripsByMinute.slice(minMinute, maxMinute).flat();
+	}
+}
+
 $: filteredTrips = timeFilter === -1? trips : trips.filter(trip => {
 	let startedMinutes = minutesSinceMidnight(trip.started_at);
 	let endedMinutes = minutesSinceMidnight(trip.ended_at);
@@ -73,9 +98,13 @@ $: filteredTrips = timeFilter === -1? trips : trips.filter(trip => {
 	       || Math.abs(endedMinutes - timeFilter) <= 60;
 });
 
+$: filteredDepartures = timeFilter === -1
+    ? d3.rollup(trips, v => v.length, d => d.start_station_id)
+    : d3.rollup(filterByMinute(departuresByMinute, timeFilter), v => v.length, d => d.start_station_id);
 
-$: filteredDepartures = d3.rollup(filteredTrips, v => v.length, d => d.start_station_id);
-$: filteredArrivals = d3.rollup(filteredTrips, v => v.length, d => d.end_station_id);
+$: filteredArrivals = timeFilter === -1
+    ? d3.rollup(trips, v => v.length, d => d.end_station_id)
+    : d3.rollup(filterByMinute(arrivalsByMinute, timeFilter), v => v.length, d => d.end_station_id);
 
 $: filteredStations = stations.map(station => {
 	const id = station.Number;
@@ -154,7 +183,7 @@ $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
 		<circle
 			{ ...getCoords(station) }
 			r={radiusScale(station.totalTraffic)}
-			style="fill: steelblue; fill-opacity:0.6; stroke:white; pointer-events:auto;">
+			style="--departure-ratio: { stationFlow(station.departures / station.totalTraffic) }">
 			<title>{station.totalTraffic} trips ({station.departures} departures, { station.arrivals} arrivals)</title>
 		</circle>
 
@@ -163,6 +192,11 @@ $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
 	</svg>
 </div>
 
+<div class="legend">
+	<div style="--departure-ratio: 1">More departures</div>
+	<div style="--departure-ratio: 0.5">Balanced</div>
+	<div style="--departure-ratio: 0">More arrivals</div>
+</div>
 
 <style>
     @import url("$lib/global.css");
@@ -179,6 +213,18 @@ $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
 
 circle{
 	pointer-events: auto;
+	fill-opacity: 0.6;
+	stroke: white;
+	--color-departures: steelblue;
+--color-arrivals: darkorange;
+--color: color-mix(
+	in oklch,
+	var(--color-departures) calc(100% * var(--departure-ratio)),
+	var(--color-arrivals)
+);
+fill: var(--color);
+
+
 }
 
 
