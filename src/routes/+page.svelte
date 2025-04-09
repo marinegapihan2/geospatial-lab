@@ -203,30 +203,64 @@ $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
     #map {
 	flex: 1;
 }
+@import url("$lib/global.css");
+
+:root {
+  --color-departures: steelblue;
+  --color-arrivals: darkorange;
+}
+
+#map {
+  flex: 1;
+}
+
 #map svg {
-	position: absolute;
-	z-index: 1;
-	width: 100%;
-	height: 100%;
-	pointer-events: none;
+  position: absolute;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-circle{
-	pointer-events: auto;
-	fill-opacity: 0.6;
-	stroke: white;
-	--color-departures: steelblue;
---color-arrivals: darkorange;
---color: color-mix(
-	in oklch,
-	var(--color-departures) calc(100% * var(--departure-ratio)),
-	var(--color-arrivals)
-);
-fill: var(--color);
-
-
+circle {
+  pointer-events: auto;
+  fill-opacity: 0.6;
+  stroke: white;
 }
 
+#map circle {
+  --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+  );
+  fill: var(--color);
+}
+
+/* Apply the same color logic to the legend */
+.legend > div {
+  --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+  );
+  background-color: var(--color);
+  flex: 1;
+  padding: 0.4em 1em;
+  color: white;
+  text-align: center;
+}
+
+.legend {
+  display: flex;
+  margin-block: 1rem;
+  gap: 1px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
 
 header {
   display: flex;
@@ -242,7 +276,7 @@ time {
   display: block;
 }
 
-em{
+em {
   display: block;
   color: gray;
   font-style: italic;
