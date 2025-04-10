@@ -238,7 +238,7 @@ $: if (selectedStation) {
                             stroke="#000000"
                             stroke-opacity="0.5"
                             stroke-width="1"
-                    >
+						>
                         <title>{feature.properties.contour} minutes of biking</title>
                     </path>
                 {/each}
@@ -288,25 +288,30 @@ $: if (selectedStation) {
   pointer-events: all; /* Allow pointer events on the entire SVG */
 }
 
-#map svg circle, #map svg path {
-  pointer-events: all;  /* Allow pointer events on circles and paths */
-  transition: opacity 0.2s ease;
+#map svg path{
+	pointer-events: auto;
 }
 
 #map svg circle {
-  fill-opacity: 0.6;  /* Default faded state */
+	opacity: 1;  /* Default faded state */
   stroke: white;
 }
 
-.selected {
+#map svg circle:not(.selected) {
+  opacity: 0.6;  /* Dim non-selected circles */
+  fill-opacity: 0.6;
+}
+
+#map svg circle .selected {
   opacity: 1; /* Full opacity for selected circle */
   stroke: black;  /* Optional: Make the selected circle stand out */
 }
 
-#map svg circle:not(.selected) {
-  opacity: 0.3;  /* Dim non-selected circles */
-}
 
+#map svg circle :has(circle.selected) circle:not(.selected) {
+		opacity: 0.3;
+		fill-opacity: 0.6;
+	}
 
 #map circle {
   --color: color-mix(
