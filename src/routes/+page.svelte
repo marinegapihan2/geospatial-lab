@@ -226,7 +226,7 @@ $: if (selectedStation) {
 
 </script>
 
-<div id="map">
+<div id="map"class:selected={selectedStation !== null}>
     <svg>
         {#key mapViewChanged}
             {#if isochrone}
@@ -285,33 +285,30 @@ $: if (selectedStation) {
   z-index: 1;
   width: 100%;
   height: 100%;
-  pointer-events: all; /* Allow pointer events on the entire SVG */
+  pointer-events: none; /* Allow pointer events on the entire SVG */
 }
 
-#map svg path{
-	pointer-events: auto;
+#map svg path {
+  pointer-events: auto;
+}
+
+#map svg path,
+#map svg circle {
+  pointer-events: auto; /* Re-enable pointer events on specific elements */
 }
 
 #map svg circle {
-	opacity: 1;  /* Default faded state */
+  opacity: 1;
+  fill-opacity: 0.7;
   stroke: white;
 }
 
-#map svg circle:not(.selected) {
-  opacity: 0.6;  /* Dim non-selected circles */
-  fill-opacity: 0.6;
+#map.selected svg circle:not(.selected) {
+  opacity: 0.6;
+  fill-opacity: 0.4;
+  stroke: transparent;
 }
 
-#map svg circle .selected {
-  opacity: 1; /* Full opacity for selected circle */
-  stroke: black;  /* Optional: Make the selected circle stand out */
-}
-
-
-#map svg circle :has(circle.selected) circle:not(.selected) {
-		opacity: 0.3;
-		fill-opacity: 0.6;
-	}
 
 #map circle {
   --color: color-mix(
