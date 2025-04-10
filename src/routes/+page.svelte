@@ -174,18 +174,84 @@ let timeFilter = -1;
 $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
                      .toLocaleString("en", {timeStyle: "short"});
 
+
+const urlBase = 'https://api.mapbox.com/isochrone/v1/mapbox/';
+const profile = 'cycling';
+const minutes = [5, 10, 15, 20];
+const contourColors = [
+	"03045e",
+	"0077b6",
+	"00b4d8",
+	"90e0ef"
+]
+let isochrone = null;
+
+async function getIso(lon, lat) {
+	const base = `${urlBase}${profile}/${lon},${lat}`;
+	const params = new URLSearchParams({
+		contours_minutes: minutes.join(','),
+		contours_colors: contourColors.join(','),
+		polygons: 'true',
+		access_token: mapboxgl.accessToken
+	});
+	const url = `${base}?${params.toString()}`;
+
+	const query = await fetch(url, { method: 'GET' });
+	isochrone = await query.json();
+
+}
+let selectedStation = null;
+
+function geoJSONPolygonToPath(feature) {
+	const path = d3.path();
+	const rings = feature.geometry.coordinates;
+
+	for (const ring of rings) {
+		for (let i = 0; i < ring.length; i++) {
+			const [lng, lat] = ring[i];
+			const { x, y } = map.project([lng, lat]);
+			if (i === 0) path.moveTo(x, y);
+			else path.lineTo(x, y);
+		}
+		path.closePath();
+	}
+	return path.toString();
+}
+
+$: if (selectedStation) {
+	getIso(+selectedStation.Long, +selectedStation.Lat);
+} else {
+	isochrone = null;
+}
+
 </script>
 
 <div id="map">
-	<svg style="pointer-events:none;">
-		{#key mapViewChanged}
-		{#each filteredStations as station}
-		<circle
-			{ ...getCoords(station) }
-			r={radiusScale(station.totalTraffic)}
-			style="--departure-ratio: { stationFlow(station.departures / station.totalTraffic) }">
-			<title>{station.totalTraffic} trips ({station.departures} departures, { station.arrivals} arrivals)</title>
-		</circle>
+    <svg>
+        {#key mapViewChanged}
+            {#if isochrone}
+                {#each isochrone.features as feature}
+                    <path
+                            d={geoJSONPolygonToPath(feature)}
+                            fill={feature.properties.fillColor}
+                            fill-opacity="0.2"
+                            stroke="#000000"
+                            stroke-opacity="0.5"
+                            stroke-width="1"
+                    >
+                        <title>{feature.properties.contour} minutes of biking</title>
+                    </path>
+                {/each}
+            {/if}
+            {#each filteredStations as station}
+	<circle
+		{...getCoords(station)}
+		r={radiusScale(station.totalTraffic)}
+		class={station?.Number === selectedStation?.Number ? "selected" : ""}
+		on:mousedown={() => selectedStation = selectedStation?.Number !== station?.Number ? station : null}
+		style="--departure-ratio: { stationFlow(station.departures / station.totalTraffic) }">
+		<title>{station.totalTraffic} trips ({station.departures} departures, {station.arrivals} arrivals)</title>
+	  </circle>
 
 	{/each}
 	{/key}
@@ -219,14 +285,28 @@ $: timeFilterLabel = new Date(0, 0, 0, 0, timeFilter)
   z-index: 1;
   width: 100%;
   height: 100%;
-  pointer-events: none;
+  pointer-events: all; /* Allow pointer events on the entire SVG */
 }
 
-circle {
-  pointer-events: auto;
-  fill-opacity: 0.6;
+#map svg circle, #map svg path {
+  pointer-events: all;  /* Allow pointer events on circles and paths */
+  transition: opacity 0.2s ease;
+}
+
+#map svg circle {
+  fill-opacity: 0.6;  /* Default faded state */
   stroke: white;
 }
+
+.selected {
+  opacity: 1; /* Full opacity for selected circle */
+  stroke: black;  /* Optional: Make the selected circle stand out */
+}
+
+#map svg circle:not(.selected) {
+  opacity: 0.3;  /* Dim non-selected circles */
+}
+
 
 #map circle {
   --color: color-mix(
@@ -237,7 +317,6 @@ circle {
   fill: var(--color);
 }
 
-/* Apply the same color logic to the legend */
 .legend > div {
   --color: color-mix(
     in oklch,
